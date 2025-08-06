@@ -1,0 +1,28 @@
+services:
+  pdf-qa-app:
+    build: .
+    container_name: intelligent-query-app
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      - FLASK_ENV=production
+      - PYTHONPATH=/app/src:/app
+      - PYTHONUNBUFFERED=1
+      - PORT=5000
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/status"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - pdf-qa-network
+
+networks:
+  pdf-qa-network:
+    driver: bridge
