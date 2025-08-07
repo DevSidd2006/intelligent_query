@@ -1253,28 +1253,6 @@ def test_api():
 
 import io
 import contextlib
-@app.route('/test-local-performance', methods=['GET'])
-def test_local_performance_endpoint():
-    """Run local performance tests and return results as JSON."""
-    output = io.StringIO()
-    results = {}
-    try:
-        with contextlib.redirect_stdout(output):
-            from test_local_performance import test_component_timing, test_memory_usage, test_api_locally
-            test_component_timing()
-            test_memory_usage()
-            test_api_locally()
-        results['success'] = True
-        results['output'] = output.getvalue()
-    except Exception as e:
-        results['success'] = False
-        results['error'] = str(e)
-        results['output'] = output.getvalue()
-    return app.response_class(
-        response=json.dumps(results),
-        status=200 if results.get('success') else 500,
-        mimetype='application/json'
-    )
 # Implement verify_bearer_token in web_app.py
 def verify_bearer_token(authorization: str):
     """
