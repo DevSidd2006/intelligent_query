@@ -86,11 +86,28 @@ def cache_document(url, chunks, embeddings, index, model):
     logger.info(f"Cached document processing results for {url[:50]}...")
 
 def get_sentence_transformer():
-    """Get cached sentence transformer model"""
+    """Get cached sentence transformer model - optimized for speed and accuracy"""
     if _model_cache['sentence_transformer'] is None:
-        logger.info("Loading SentenceTransformer model (first time only)...")
-        _model_cache['sentence_transformer'] = SentenceTransformer('BAAI/bge-large-en-v1.5')
-        logger.info("SentenceTransformer model loaded and cached")
+        logger.info("⚡ Loading optimized SentenceTransformer model (first time only)...")
+        # Use faster model with good quality: all-mpnet-base-v2 (balanced speed/accuracy)
+        # Alternative fast option: all-MiniLM-L6-v2 (very fast, good quality)
+        try:
+            # Try the balanced model first
+            _model_cache['sentence_transformer'] = SentenceTransformer('all-mpnet-base-v2')
+            logger.info("✅ Loaded all-mpnet-base-v2 (balanced speed/accuracy)")
+        except Exception as e:
+            logger.warning(f"Failed to load all-mpnet-base-v2: {e}")
+            try:
+                # Fallback to faster model
+                _model_cache['sentence_transformer'] = SentenceTransformer('all-MiniLM-L6-v2')
+                logger.info("✅ Loaded all-MiniLM-L6-v2 (fast model)")
+            except Exception as e2:
+                logger.error(f"Failed to load fast model: {e2}")
+                # Final fallback to original
+                _model_cache['sentence_transformer'] = SentenceTransformer('BAAI/bge-large-en-v1.5')
+                logger.info("✅ Loaded BAAI/bge-large-en-v1.5 (high accuracy)")
+        
+        logger.info("🎯 SentenceTransformer model loaded and cached")
     return _model_cache['sentence_transformer']
 
 def get_ner_pipeline():
@@ -121,29 +138,84 @@ def get_api_key():
     raise ValueError("❌ No API key found! Please set OPENROUTER_API_KEY in your .env file")
 
 # Step 1: Document Ingestion
-def extract_text_from_pdf(pdf_path):
-    if fitz is not None:
-        # Use PyMuPDF (faster)
+def extract_text_from_pdf_fast(pdf_path):
+    """Fast PDF text extraction using PyMuPDF with progress tracking"""
+    try:
+        logger.info(f"⚡ Starting fast PDF extraction with PyMuPDF: {pdf_path}")
+        
+        # Open PDF with PyMuPDF
         doc = fitz.open(pdf_path)
         text = ""
-        for page in doc:
-            text += page.get_text()
+        total_pages = len(doc)
+        
+        logger.info(f"Processing {total_pages} pages...")
+        
+        # Extract text from all pages with progress tracking
+        for page_num in range(total_pages):
+            page = doc.load_page(page_num)
+            page_text = page.get_text()
+            text += page_text + "\n"
+            
+            # Progress indicator every 10 pages
+            if (page_num + 1) % 10 == 0 or page_num == total_pages - 1:
+                logger.info(f"Processed {page_num + 1}/{total_pages} pages")
+        
         doc.close()
-        # Clean text (e.g., remove OCR errors)
+        
+        # Clean and optimize text
         text = text.replace("iviviv", "").replace("Air Ambulasce", "Air Ambulance")
+        # Remove excessive whitespace
+        import re
+        text = re.sub(r'\n\s*\n', '\n\n', text)  # Normalize line breaks
+        text = re.sub(r' +', ' ', text)  # Remove multiple spaces
+        
+        logger.info(f"✅ Fast extraction completed! Extracted {len(text)} characters from {total_pages} pages")
         return text
-    else:
+        
+    except Exception as e:
+        logger.error(f"❌ PyMuPDF extraction failed: {str(e)}")
         # Fallback to pdfplumber
-        logger.info("Using pdfplumber for PDF extraction")
+        logger.info("🔄 Falling back to pdfplumber...")
+        return extract_text_from_pdf_fallback(pdf_path)
+
+def extract_text_from_pdf_fallback(pdf_path):
+    """Fallback PDF extraction using pdfplumber"""
+    try:
+        logger.info("Using pdfplumber for PDF extraction (fallback)")
+        text = ""
         with pdfplumber.open(pdf_path) as pdf:
-            text = ""
-            for page in pdf.pages:
+            total_pages = len(pdf.pages)
+            logger.info(f"Processing {total_pages} pages with pdfplumber...")
+            
+            for page_num, page in enumerate(pdf.pages, 1):
                 page_text = page.extract_text()
                 if page_text:
                     text += page_text + "\n"
-        # Clean text (e.g., remove OCR errors)
+                
+                # Progress indicator every 10 pages
+                if page_num % 10 == 0 or page_num == total_pages:
+                    logger.info(f"Processed {page_num}/{total_pages} pages")
+        
+        # Clean text
         text = text.replace("iviviv", "").replace("Air Ambulasce", "Air Ambulance")
+        import re
+        text = re.sub(r'\n\s*\n', '\n\n', text)
+        text = re.sub(r' +', ' ', text)
+        
+        logger.info(f"✅ Fallback extraction completed! Extracted {len(text)} characters")
         return text
+        
+    except Exception as e:
+        logger.error(f"❌ Both PyMuPDF and pdfplumber extraction failed: {str(e)}")
+        raise e
+
+def extract_text_from_pdf(pdf_path):
+    """Main PDF extraction function - uses fast PyMuPDF first, then fallback"""
+    if fitz is not None:
+        return extract_text_from_pdf_fast(pdf_path)
+    else:
+        logger.warning("PyMuPDF not available, using pdfplumber")
+        return extract_text_from_pdf_fallback(pdf_path)
 
 # DOCX extraction
 def extract_text_from_docx(docx_path):
@@ -179,47 +251,81 @@ def download_and_extract_text(url):
     else:
         raise Exception(f"Unsupported file type: {ext}")
 
-# Step 2: Text Chunking and Embedding
+# Step 2: Text Chunking and Embedding (Optimized)
 def create_document_embeddings(text):
+    """Create optimized document embeddings with balanced speed and accuracy"""
     # Use cached model instead of creating new one
     model = get_sentence_transformer()
     
-    # Split into smaller chunks to manage token limits better
-    # First split by paragraphs, then further split if needed
-    paragraphs = text.split("\n\n")
+    logger.info("🚀 Starting optimized chunking and embedding process...")
+    
+    # Optimized chunking strategy: balanced for speed and accuracy
     chunks = []
     
+    # Method 1: Paragraph-based chunking with size limits
+    paragraphs = text.split("\n\n")
+    
     for paragraph in paragraphs:
-        # If paragraph is too long, split it into smaller chunks
-        if len(paragraph) > 800:
-            # Split long paragraphs into sentences and group them
+        paragraph = paragraph.strip()
+        if not paragraph:
+            continue
+            
+        # Optimal chunk size: 600 characters (balanced speed/accuracy)
+        if len(paragraph) <= 600:
+            chunks.append(paragraph)
+        else:
+            # Split longer paragraphs intelligently
             sentences = paragraph.split(". ")
             current_chunk = ""
             
             for sentence in sentences:
-                if len(current_chunk + sentence) < 800:
+                # Add sentence if it fits in current chunk
+                if len(current_chunk + sentence + ". ") <= 600:
                     current_chunk += sentence + ". "
                 else:
+                    # Save current chunk and start new one
                     if current_chunk.strip():
                         chunks.append(current_chunk.strip())
                     current_chunk = sentence + ". "
             
+            # Don't forget the last chunk
             if current_chunk.strip():
                 chunks.append(current_chunk.strip())
-        else:
-            if paragraph.strip():
-                chunks.append(paragraph.strip())
     
-    # Filter out very short chunks
-    chunks = [chunk for chunk in chunks if len(chunk) > 50]
+    # Filter out very short chunks (less than 100 characters)
+    chunks = [chunk for chunk in chunks if len(chunk) >= 100]
     
-    logger.info(f"Encoding {len(chunks)} chunks with cached model...")
-    embeddings = model.encode(chunks)
+    logger.info(f"📊 Created {len(chunks)} optimized chunks")
+    logger.info(f"💡 Average chunk size: {sum(len(c) for c in chunks) // len(chunks)} characters")
     
-    # Create FAISS index
+    # Optimized embedding with progress tracking
+    logger.info("🔮 Encoding chunks with fast model...")
+    
+    # Process in smaller batches for better memory management
+    batch_size = 32
+    all_embeddings = []
+    
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i + batch_size]
+        batch_embeddings = model.encode(batch, show_progress_bar=False)
+        all_embeddings.append(batch_embeddings)
+        
+        # Progress indicator
+        processed = min(i + batch_size, len(chunks))
+        if processed % 64 == 0 or processed == len(chunks):
+            logger.info(f"Encoded {processed}/{len(chunks)} chunks")
+    
+    # Combine all embeddings
+    embeddings = np.vstack(all_embeddings) if len(all_embeddings) > 1 else all_embeddings[0]
+    
+    # Create optimized FAISS index
+    logger.info("🗂️ Creating FAISS index...")
     dimension = embeddings.shape[1]
     index = faiss.IndexFlatL2(dimension)
-    index.add(embeddings)
+    index.add(embeddings.astype('float32'))  # Ensure correct dtype
+    
+    logger.info(f"✅ Embedding process completed! {len(chunks)} chunks indexed")
+    
     return chunks, embeddings, index, model
 
 def estimate_tokens(text: str) -> int:
@@ -318,22 +424,29 @@ def generate_response(query, chunks, embeddings=None, index=None, model_st=None,
     parsed_query = parse_query(query)
     relevant_chunks = retrieve_relevant_chunks(query, chunks, embeddings, index, model_st)
     
-    # Construct prompt for LLM
-    prompt = f"""Based on these document excerpts, answer the query in JSON format.
+    # Construct prompt for LLM - optimized for natural, direct answers
+    prompt = f"""You are answering questions about an insurance policy document. Provide clear, direct answers based on the information provided.
 
-Query: {query}
+Question: {query}
 
-Document excerpts:
+Document information:
 {chr(10).join([f"{i+1}. {chunk}" for i, chunk in enumerate(relevant_chunks)])}
 
-Response format:
+Instructions:
+1. Give a direct, natural answer as if you are an insurance expert
+2. Include specific numbers, dates, percentages, and conditions when mentioned
+3. Write in a clear, professional tone
+4. Do not mention "according to the document" or "based on excerpts"
+5. Present the information as factual statements
+6. Keep the answer concise but complete
+7. If the information is not available, state "The information is not available in the policy document."
+
+Answer format (JSON):
 {{
-    "decision": "Covered/Not Covered/Partially Covered/Unable to determine",
-    "amount": "coverage amount or null",
-    "justification": "brief explanation based on excerpts"
+    "justification": "Your direct, natural answer presenting the information as facts"
 }}
 
-Base answer only on provided excerpts."""
+Provide a clear, factual answer about the policy."""
     
     # Estimate token count using improved function
     estimated_tokens = estimate_tokens(prompt)
@@ -344,22 +457,31 @@ Base answer only on provided excerpts."""
         logger.warning("Prompt too long, using only first chunk")
         relevant_chunks = relevant_chunks[:1]
         # Recreate shorter prompt
-        prompt = f"""Based on this document excerpt, answer in JSON format.
+        prompt = f"""Answer this insurance policy question directly and naturally.
 
-Query: {query}
+Question: {query}
 
-Excerpt: {relevant_chunks[0][:300]}...
+Policy information: {relevant_chunks[0][:300]}...
 
-Format: {{"decision": "...", "amount": "...", "justification": "..."}}"""
+Provide a direct, factual answer. Include specific details when mentioned.
+
+Format: {{"justification": "Your direct answer presenting the policy information as facts"}}"""
 
     try:
         # Generate response using OpenRouter with new API
         system_prompt = (
-            "You are an expert insurance analyst AI. "
-            "Always answer strictly based on the provided document excerpts. "
-            "If the answer is not present, reply 'Unable to determine'. "
-            "Return your answer in the specified JSON format. "
-            "Do not hallucinate or make assumptions."
+            "You are an insurance policy expert providing direct, clear answers. "
+            "Present information as factual statements without referencing source documents. "
+            "Guidelines: "
+            "1. Give natural, direct answers as if you are an insurance expert "
+            "2. Never say 'according to the document' or 'based on excerpts' "
+            "3. Present information as established facts "
+            "4. Include specific numbers, dates, percentages, and conditions "
+            "5. Write in a professional, authoritative tone "
+            "6. Keep answers concise but complete "
+            "7. Return answers in the specified JSON format "
+            "8. If information is not available, state it clearly without referencing documents "
+            "Answer as if you are explaining policy terms directly to a customer."
         )
         response = client.chat.completions.create(
             model=llm_model,
@@ -394,16 +516,12 @@ Format: {{"decision": "...", "amount": "...", "justification": "..."}}"""
         except json.JSONDecodeError:
             # If JSON parsing fails, create a structured response
             return json.dumps({
-                "decision": "Unable to determine",
-                "amount": None,
-                "justification": f"AI Response: {response_text}"
+                "justification": response_text
             }, indent=2)
             
     except Exception as e:
         # Fallback response in case of API errors
         return json.dumps({
-            "decision": "Error",
-            "amount": None,
             "justification": f"Error generating response: {str(e)}"
         }, indent=2)
 
@@ -620,24 +738,28 @@ async def hackrx_run(
             response = generate_response(q, chunks, embeddings, index, model_st)
             try:
                 result = json.loads(response)
-                answer = result.get('justification') or str(result)
+                # Extract the justification as the main answer
+                answer = result.get('justification', '')
+                if not answer:
+                    # Fallback to decision + justification format
+                    decision = result.get('decision', '')
+                    justification = result.get('justification', '')
+                    amount = result.get('amount', '')
+                    
+                    if amount and amount != 'null':
+                        answer = f"{justification} Amount: {amount}"
+                    else:
+                        answer = justification or decision or str(result)
             except Exception:
+                # If JSON parsing fails, use the raw response
                 answer = response
+            
             answers.append(answer)
             
             # Force garbage collection after each question to manage memory
             if i % 3 == 0:  # Every 3 questions
                 gc.collect()
 
-        # Add processing_info for leaderboard compliance
-        processing_info = {
-            "response_time": None,  # You can set actual timing if needed
-            "token_usage": None,    # Set if available from LLM response
-            "chunks_processed": len(chunks),
-            "questions_answered": len(questions),
-            "cache_hit": cached_doc is not None
-        }
-        
         logger.info(f"Successfully processed {len(questions)} questions")
         
         # Final cleanup (but don't delete cached items)
@@ -645,10 +767,9 @@ async def hackrx_run(
             del chunks, embeddings, index, model_st
         gc.collect()
         
+        # Return exactly in the expected format
         return JSONResponse({
-            "success": True,
-            "answers": answers,
-            "processing_info": processing_info
+            "answers": answers
         })
 
     except Exception as e:
@@ -666,7 +787,7 @@ if __name__ == "__main__":
     openai.api_key = api_key
     
     # Get port from environment or use default
-    port = int(os.getenv('PORT', 3000))
+    port = int(os.getenv('PORT', 5000))
     
     # Start the FastAPI server
     uvicorn.run(app, host="0.0.0.0", port=port)

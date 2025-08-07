@@ -9,6 +9,7 @@ import time
 import gc
 import secrets
 import logging
+from collections import defaultdict
 
 # Configure logging
 logging.basicConfig(
@@ -234,6 +235,82 @@ HTML_TEMPLATE = """
             text-align: center;
         }
         
+        .upload-tabs {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
+        }
+        
+        .upload-tab {
+            padding: 10px 20px;
+            background: var(--bg-light);
+            color: var(--text);
+            border: none;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border-bottom: 2px solid transparent;
+            font-weight: 500;
+        }
+        
+        .upload-tab.active {
+            border-bottom: 2px solid var(--accent);
+            color: var(--accent);
+            background: rgba(245, 158, 11, 0.1);
+        }
+        
+        .upload-tab:first-child {
+            border-radius: 10px 0 0 10px;
+        }
+        
+        .upload-tab:last-child {
+            border-radius: 0 10px 10px 0;
+        }
+        
+        .upload-content {
+            display: none;
+        }
+        
+        .upload-content.active {
+            display: block;
+            animation: fadeIn 0.5s ease-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .url-input-container {
+            border: 3px dashed #e0e7ff;
+            border-radius: 15px;
+            padding: 40px 20px;
+            transition: all 0.3s ease;
+            position: relative;
+            background: linear-gradient(145deg, #f8fafc 0%, #f1f5f9 100%);
+            margin-bottom: 20px;
+        }
+        
+        .url-input-container:hover {
+            border-color: #667eea;
+            background: linear-gradient(145deg, #eef2ff 0%, #e0e7ff 100%);
+        }
+        
+        .url-input {
+            width: 100%;
+            padding: 15px 20px;
+            border: 2px solid #e0e7ff;
+            border-radius: 10px;
+            font-size: 1rem;
+            margin-top: 20px;
+            outline: none;
+            transition: all 0.3s ease;
+        }
+        
+        .url-input:focus {
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
         .upload-area {
             border: 3px dashed #e0e7ff;
             border-radius: 15px;
@@ -430,7 +507,6 @@ HTML_TEMPLATE = """
         .covered { background: #dcfce7; color: #166534; }
         .not-covered { background: #fef2f2; color: #991b1b; }
         .partial { background: #fef3c7; color: #92400e; }
-        .unknown { background: #f3f4f6; color: #374151; }
         
         .input-section {
             padding: 20px;
@@ -593,7 +669,12 @@ HTML_TEMPLATE = """
 
             {% if not document_loaded %}
             <div class="upload-section">
-                <form action="/upload" method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="upload-tabs">
+                    <button class="upload-tab active" onclick="switchTab('file')">Upload PDF</button>
+                    <button class="upload-tab" onclick="switchTab('url')">PDF URL</button>
+                </div>
+                
+                <form action="/upload" method="post" enctype="multipart/form-data" id="file-content" class="upload-content active">
                     <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                         <div class="upload-icon">📄</div>
                         <div class="upload-text">Drop your PDF here or click to browse</div>
@@ -601,6 +682,15 @@ HTML_TEMPLATE = """
                         <input type="file" name="file" accept=".pdf" class="file-input" id="fileInput" required>
                     </div>
                     <button type="submit" class="btn">✨ Upload & Analyze</button>
+                </form>
+                
+                <form action="/upload-url" method="post" id="url-content" class="upload-content">
+                    <div class="url-input-container">
+                        <div class="upload-icon">🔗</div>
+                        <div class="upload-text">Enter PDF URL</div>
+                        <input type="url" name="pdf_url" class="url-input" id="pdfUrlInput" placeholder="https://example.com/document.pdf" required>
+                    </div>
+                    <button type="submit" class="btn">🌐 Fetch & Analyze</button>
                 </form>
             </div>
             {% endif %}
@@ -654,6 +744,22 @@ HTML_TEMPLATE = """
     </div>
 
     <script>
+        function switchTab(tabId) {
+            // Hide all content sections
+            document.querySelectorAll('.upload-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            // Deactivate all tabs
+            document.querySelectorAll('.upload-tab').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Activate selected tab and content
+            document.querySelector(`.upload-tab[onclick="switchTab('${tabId}')"]`).classList.add('active');
+            document.getElementById(`${tabId}-content`).classList.add('active');
+        }
+
         function handleKeyPress(event) {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
@@ -729,11 +835,10 @@ HTML_TEMPLATE = """
             const messageDiv = document.createElement('div');
             messageDiv.className = 'message bot-message';
             
-            const decision = response.decision || 'Unknown';
-            const amount = response.amount && response.amount !== 'null' ? response.amount : null;
+            const decision = response.decision ? response.decision : '';
             const justification = response.justification || 'No explanation provided.';
             
-            let badgeClass = 'unknown';
+            let badgeClass = '';
             if (decision.toLowerCase().includes('covered') && !decision.toLowerCase().includes('not')) {
                 badgeClass = decision.toLowerCase().includes('partially') ? 'partial' : 'covered';
             } else if (decision.toLowerCase().includes('not covered')) {
@@ -742,8 +847,7 @@ HTML_TEMPLATE = """
             
             let responseHtml = `
                 <div class="bot-bubble">
-                    <div class="decision-badge ${badgeClass}">${decision}</div>
-                    ${amount ? `<div style="margin-bottom: 10px; font-weight: 600; color: #667eea;">${amount}</div>` : ''}
+                    ${decision ? `<div class="decision-badge ${badgeClass}">${decision}</div>` : ''}
                     <div>${justification}</div>
                 </div>
             `;
@@ -801,7 +905,8 @@ HTML_TEMPLATE = """
         // File upload handling
         document.addEventListener('DOMContentLoaded', function() {
             const fileInput = document.getElementById('fileInput');
-            const uploadForm = document.getElementById('uploadForm');
+            const fileForm = document.getElementById('file-content');
+            const urlForm = document.getElementById('url-content');
             
             if (fileInput) {
                 fileInput.addEventListener('change', function() {
@@ -827,7 +932,15 @@ HTML_TEMPLATE = """
                     }
                 });
                 
-                uploadForm.addEventListener('submit', function() {
+                fileForm.addEventListener('submit', function() {
+                    const submitBtn = this.querySelector('.btn');
+                    submitBtn.innerHTML = '⏳ Processing...';
+                    submitBtn.disabled = true;
+                });
+            }
+            
+            if (urlForm) {
+                urlForm.addEventListener('submit', function() {
                     const submitBtn = this.querySelector('.btn');
                     submitBtn.innerHTML = '⏳ Processing...';
                     submitBtn.disabled = true;
@@ -945,6 +1058,60 @@ def upload_file():
         logger.error(f"Upload error: {traceback.format_exc()}")
         return redirect(url_for('index'))
 
+@app.route('/upload-url', methods=['POST'])
+def upload_url():
+    try:
+        # Import the download function from app.py
+        from app import download_and_extract_text
+        
+        pdf_url = request.form.get('pdf_url', '').strip()
+        if not pdf_url:
+            flash('Please enter a valid PDF URL')
+            return redirect(url_for('index'))
+        
+        # Clear previous document first
+        current_document.update({
+            'chunks': None,
+            'embeddings': None,
+            'index': None,
+            'model_st': None,
+            'filename': None,
+            'upload_time': None,
+            'chunk_count': 0
+        })
+        
+        logger.info(f"Processing PDF from URL: {pdf_url}")
+        
+        # Download and process the PDF from URL
+        text = download_and_extract_text(pdf_url)
+        chunks, embeddings, index, model_st = create_document_embeddings(text)
+        
+        # Extract filename from URL
+        filename = pdf_url.split('/')[-1].split('?')[0]
+        if not filename.endswith('.pdf'):
+            filename = 'document.pdf'
+        
+        # Store in global variables
+        current_document.update({
+            'chunks': chunks,
+            'embeddings': embeddings,
+            'index': index,
+            'model_st': model_st,
+            'filename': secure_filename(filename),
+            'upload_time': time.strftime('%H:%M:%S'),
+            'chunk_count': len(chunks)
+        })
+        
+        logger.info(f"Successfully processed PDF from URL with {len(chunks)} chunks")
+        
+        flash(f'✅ PDF "{filename}" downloaded and processed successfully! Ready for AI analysis with {len(chunks)} text sections.')
+        return redirect(url_for('index'))
+        
+    except Exception as e:
+        flash(f'❌ Error processing PDF from URL: {str(e)}')
+        logger.error(f"URL upload error: {traceback.format_exc()}")
+        return redirect(url_for('index'))
+
 @app.route('/ask', methods=['POST'])
 def ask_question():
     try:
@@ -992,8 +1159,7 @@ def ask_question():
             return jsonify({
                 'success': True,
                 'response': {
-                    'decision': 'Response received',
-                    'amount': None,
+                    'decision': '',
                     'justification': response,
                     '_debug_info': {
                         'document': current_document['filename'],
@@ -1083,6 +1249,186 @@ def test_api():
         return jsonify({
             'success': False,
             'error': f'Error testing API: {str(e)}'
+        }), 500
+
+import io
+import contextlib
+@app.route('/test-local-performance', methods=['GET'])
+def test_local_performance_endpoint():
+    """Run local performance tests and return results as JSON."""
+    output = io.StringIO()
+    results = {}
+    try:
+        with contextlib.redirect_stdout(output):
+            from test_local_performance import test_component_timing, test_memory_usage, test_api_locally
+            test_component_timing()
+            test_memory_usage()
+            test_api_locally()
+        results['success'] = True
+        results['output'] = output.getvalue()
+    except Exception as e:
+        results['success'] = False
+        results['error'] = str(e)
+        results['output'] = output.getvalue()
+    return app.response_class(
+        response=json.dumps(results),
+        status=200 if results.get('success') else 500,
+        mimetype='application/json'
+    )
+# Implement verify_bearer_token in web_app.py
+def verify_bearer_token(authorization: str):
+    """
+    Verifies Bearer token from Authorization header.
+    Requires HACKRX_BEARER_TOKEN environment variable to be set.
+    """
+    required_token = os.environ.get('HACKRX_BEARER_TOKEN')
+    if not required_token:
+        return False, "HACKRX_BEARER_TOKEN environment variable is not configured."
+    
+    if not authorization or not authorization.startswith('Bearer '):
+        return False, "Missing or invalid Authorization header."
+    
+    token = authorization.split('Bearer ')[-1].strip()
+    if token != required_token:
+        return False, "Invalid Bearer token."
+    return True, None
+
+# Implement rate limiting for web_app.py
+RATE_LIMIT_WINDOW = 60  # 1 minute window
+RATE_LIMIT_REQUESTS = 10  # 10 requests per window
+request_counts = defaultdict(list)
+
+def check_rate_limit(client_ip: str) -> bool:
+    """Simple rate limiting - 10 requests per minute per IP"""
+    now = time.time()
+    # Clean old requests
+    request_counts[client_ip] = [req_time for req_time in request_counts[client_ip] 
+                               if now - req_time < RATE_LIMIT_WINDOW]
+    
+    if len(request_counts[client_ip]) >= RATE_LIMIT_REQUESTS:
+        return False
+    
+    request_counts[client_ip].append(now)
+    return True
+
+@app.route('/hackrx/run', methods=['POST'])
+def hackrx_run():
+    """
+    HackRx compliant endpoint for testing the system with standardized input/output.
+    This is the main endpoint used for the hackathon submission testing.
+    """
+    try:
+        # Get client IP for rate limiting
+        client_ip = request.remote_addr
+        if not check_rate_limit(client_ip):
+            logger.warning(f"Rate limit exceeded for IP: {client_ip}")
+            return jsonify({
+                "success": False, 
+                "error": "Rate limit exceeded. Please try again later."
+            }), 429
+        
+        # Verify Bearer token
+        authorization = request.headers.get('Authorization')
+        ok, err = verify_bearer_token(authorization)
+        if not ok:
+            logger.warning(f"Bearer token verification failed: {err}")
+            return jsonify({"success": False, "error": err}), 401
+
+        # Get request data
+        if not request.is_json:
+            logger.warning("Request body is not JSON")
+            return jsonify({
+                "success": False, 
+                "error": "Request body must be JSON."
+            }), 400
+            
+        data = request.get_json()
+        documents = data.get('documents')
+        questions = data.get('questions')
+        
+        # Validate input parameters
+        if not documents:
+            logger.warning("Request missing documents parameter")
+            return jsonify({
+                "success": False, 
+                "error": "Missing 'documents' parameter. Please provide a URL to the document."
+            }), 400
+        
+        if not questions:
+            logger.warning("Request missing questions parameter")
+            return jsonify({
+                "success": False, 
+                "error": "Missing 'questions' parameter. Please provide a list of questions."
+            }), 400
+        
+        if not isinstance(questions, list) or len(questions) == 0:
+            logger.warning("Invalid questions format")
+            return jsonify({
+                "success": False, 
+                "error": "Questions must be a non-empty list."
+            }), 400
+        
+        # Validate URL format
+        if not documents.startswith(('http://', 'https://')):
+            logger.warning(f"Invalid document URL format: {documents}")
+            return jsonify({
+                "success": False, 
+                "error": "Documents parameter must be a valid URL."
+            }), 400
+
+        # Download and extract text from the document URL
+        logger.info(f"Processing document URL: {documents}")
+        
+        # Import the download function if needed
+        from app import download_and_extract_text
+        
+        # Process document
+        text = download_and_extract_text(documents)
+        logger.info(f"Extracted {len(text)} characters from document")
+        
+        chunks, embeddings, index, model_st = create_document_embeddings(text)
+        logger.info(f"Created {len(chunks)} chunks for processing")
+
+        # Generate answers for each question
+        answers = []
+        for i, q in enumerate(questions):
+            logger.info(f"Processing question {i+1}/{len(questions)}: {q[:50]}...")
+            response = generate_response(q, chunks, embeddings, index, model_st)
+            try:
+                result = json.loads(response)
+                # Extract the justification as the main answer
+                answer = result.get('justification', '')
+                if not answer:
+                    # Fallback to decision + justification format
+                    decision = result.get('decision', '')
+                    justification = result.get('justification', '')
+                    amount = result.get('amount', '')
+                    
+                    if amount and amount != 'null':
+                        answer = f"{justification} Amount: {amount}"
+                    else:
+                        answer = justification or decision or str(result)
+            except Exception:
+                # If JSON parsing fails, use the raw response
+                answer = response
+            
+            answers.append(answer)
+            
+            # Force garbage collection after each question to manage memory
+            if i % 3 == 0:  # Every 3 questions
+                gc.collect()
+        
+        # Return the final response
+        return jsonify({
+            "success": True,
+            "answers": answers
+        })
+        
+    except Exception as e:
+        logger.error(f"Error in hackrx_run: {str(e)}\n{traceback.format_exc()}")
+        return jsonify({
+            "success": False,
+            "error": f"Internal server error: {str(e)}"
         }), 500
 
 if __name__ == '__main__':
