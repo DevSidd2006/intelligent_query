@@ -13,7 +13,7 @@ A web application that allows users to upload PDF documents and ask questions ab
 ## Technologies Used
 
 - **Backend**: Flask, Python
-- **AI**: OpenRouter API for accessing multiple AI models (Claude, GPT, etc.)
+- **AI**: Groq API for fast inference with Llama 3.1 8B Instant model
 - **Document Processing**: PyMuPDF for PDF text extraction
 - **Search**: FAISS for semantic similarity search
 - **ML**: Sentence Transformers for embeddings
@@ -38,13 +38,13 @@ pdf-qa-system/
 
 ## Overview
 
-Intelligent Query is a Dockerized Python application for secure, high-performance Q&A on PDF documents using advanced LLMs (Claude Sonnet 4 via OpenRouter). It supports both Flask and FastAPI backends, robust error handling, health checks, async model loading, and performance profiling.
+Intelligent Query is a Dockerized Python application for secure, high-performance Q&A on PDF documents using advanced LLMs (Llama 3.1 8B Instant via Groq API). It supports both Flask and FastAPI backends, robust error handling, health checks, async model loading, and performance profiling.
 
 ## Features
 
 - Upload PDF documents and ask questions
-- Advanced prompt engineering for insurance/health Q&A
-- Supports Claude Sonnet 4 (OpenRouter API)
+- Optimized prompt engineering for fast, accurate responses
+- Supports Llama 3.1 8B Instant (Groq API)
 - Dockerized for easy deployment
 - Health check and performance endpoints
 - Async model loading and caching
@@ -97,7 +97,7 @@ uploads/
 2. Copy `.env.example` to `.env` and set your API keys:
    ```powershell
    Copy-Item .env.example .env
-   # Edit .env and set OPENROUTER_API_KEY
+   # Edit .env and set GROQ_API_KEY
    ```
 3. Build and run with Docker Compose:
    ```powershell

@@ -1,0 +1,498 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Intelligent Query - AI-Powered Document Intelligence</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #6366f1;
+            --secondary-color: #8b5cf6;
+            --accent-color: #06b6d4;
+            --dark-bg: #0f172a;
+            --card-bg: #1e293b;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, var(--dark-bg) 0%, #1e293b 100%);
+            color: white;
+            min-height: 100vh;
+        }
+        
+        .hero-section {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .hero-section::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="0.5"/></pattern></defs><rect width="100" height="100" fill="url(%23grid)"/></svg>');
+            opacity: 0.3;
+        }
+        
+        .hero-content {
+            position: relative;
+            z-index: 2;
+        }
+        
+        .hero-title {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, #ffffff 0%, #e2e8f0 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .hero-subtitle {
+            font-size: 1.25rem;
+            opacity: 0.9;
+            margin-bottom: 2rem;
+            line-height: 1.6;
+        }
+        
+        .cta-button {
+            background: linear-gradient(135deg, #ffffff 0%, #f1f5f9 100%);
+            color: var(--primary-color);
+            border: none;
+            padding: 1rem 2.5rem;
+            font-size: 1.1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 15px 40px rgba(0,0,0,0.3);
+            color: var(--primary-color);
+        }
+        
+        .features-section {
+            padding: 5rem 0;
+            background: var(--dark-bg);
+        }
+        
+        .feature-card {
+            background: var(--card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            height: 100%;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+        
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary-color);
+            box-shadow: 0 20px 40px rgba(99, 102, 241, 0.1);
+        }
+        
+        .feature-icon {
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 1.5rem;
+            font-size: 1.5rem;
+        }
+        
+        .stats-section {
+            background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+            padding: 3rem 0;
+        }
+        
+        .stat-item {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+        }
+        
+        .floating-elements {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+        
+        .floating-element {
+            position: absolute;
+            background: rgba(255,255,255,0.1);
+            border-radius: 50%;
+            animation: float 6s ease-in-out infinite;
+        }
+        
+        .floating-element:nth-child(1) {
+            width: 80px;
+            height: 80px;
+            top: 20%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+        
+        .floating-element:nth-child(2) {
+            width: 120px;
+            height: 120px;
+            top: 60%;
+            right: 10%;
+            animation-delay: 2s;
+        }
+        
+        .floating-element:nth-child(3) {
+            width: 60px;
+            height: 60px;
+            bottom: 20%;
+            left: 20%;
+            animation-delay: 4s;
+        }
+        
+        @keyframes float {
+            0%, 100% { transform: translateY(0px) rotate(0deg); }
+            50% { transform: translateY(-20px) rotate(180deg); }
+        }
+        
+        @keyframes glow {
+            from {
+                box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
+                transform: scale(1);
+            }
+            to {
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.8), 0 0 30px rgba(16, 185, 129, 0.4);
+                transform: scale(1.05);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+            50% {
+                transform: scale(1.05);
+                opacity: 0.9;
+            }
+        }
+        
+        .comparison-table-container {
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            border-radius: 20px;
+            overflow: hidden;
+        }
+        
+        .comparison-table th:last-child {
+            position: relative;
+        }
+        
+        .comparison-table th:last-child::before {
+            content: '👑 BEST CHOICE';
+            position: absolute;
+            top: -10px;
+            right: 10px;
+            background: #fbbf24;
+            color: #92400e;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.7rem;
+            font-weight: 700;
+        }
+        
+        @media (max-width: 768px) {
+            .hero-title {
+                font-size: 2.5rem;
+            }
+            .hero-subtitle {
+                font-size: 1.1rem;
+            }
+            
+            .comparison-table {
+                font-size: 0.8rem;
+            }
+            
+            .comparison-table th,
+            .comparison-table td {
+                padding: 12px 8px;
+            }
+            
+            .comparison-table th:last-child::before {
+                font-size: 0.6rem;
+                padding: 2px 6px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Hero Section -->
+    <section class="hero-section">
+        <div class="floating-elements">
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+            <div class="floating-element"></div>
+        </div>
+        
+        <div class="container hero-content">
+            <div class="row align-items-center">
+                <div class="col-lg-6">
+                    <div class="tagline" style="background: linear-gradient(135deg, #fbbf24, #f59e0b); color: #92400e; padding: 8px 20px; border-radius: 25px; display: inline-block; font-weight: 600; font-size: 0.9rem; margin-bottom: 1rem; animation: pulse 2s infinite;">
+                        🚀 The Future of Document Intelligence is Here
+                    </div>
+                    <h1 class="hero-title">Intelligent Query</h1>
+                    <p class="hero-subtitle">
+                        <strong>ChatGPT for Documents.</strong> Transform any PDF into an intelligent conversation. Upload files up to 200MB and get lightning-fast answers that are 300x cheaper than competitors.
+                    </p>
+                    <button class="btn cta-button" onclick="startChat()">
+                        <i class="fas fa-rocket me-2"></i>Try Now - <span style="background: linear-gradient(135deg, #10b981, #059669); padding: 4px 12px; border-radius: 15px; color: white; font-weight: 700; margin-left: 8px; animation: glow 2s ease-in-out infinite alternate;">FREE</span>
+                    </button>
+                </div>
+                <div class="col-lg-6 text-center">
+                    <div style="font-size: 15rem; opacity: 0.1;">
+                        <i class="fas fa-file-pdf"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Stats Section -->
+    <section class="stats-section">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-3 col-6">
+                    <div class="stat-item">
+                        <div class="stat-number">200MB</div>
+                        <div>Max File Size</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="stat-item">
+                        <div class="stat-number">&lt;3s</div>
+                        <div>Response Time</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="stat-item">
+                        <div class="stat-number">99.9%</div>
+                        <div>Accuracy</div>
+                    </div>
+                </div>
+                <div class="col-md-3 col-6">
+                    <div class="stat-item">
+                        <div class="stat-number">24/7</div>
+                        <div>Available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Comparison Section -->
+    <section class="comparison-section" style="padding: 5rem 0; background: var(--dark-bg);">
+        <div class="container">
+            <div class="row text-center mb-5">
+                <div class="col-12">
+                    <h2 class="display-4 fw-bold mb-3">How We Compare</h2>
+                    <p class="lead text-muted">See why professionals choose IntelliQuery over ChatGPT and Claude</p>
+                </div>
+            </div>
+            
+            <div class="comparison-table-container" style="overflow-x: auto;">
+                <table class="comparison-table" style="width: 100%; background: var(--card-bg); border-radius: 20px; overflow: hidden; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));">
+                            <th style="padding: 20px; color: white; font-weight: 600; text-align: left;">Feature</th>
+                            <th style="padding: 20px; color: white; font-weight: 600; text-align: center;">ChatGPT</th>
+                            <th style="padding: 20px; color: white; font-weight: 600; text-align: center;">Claude</th>
+                            <th style="padding: 20px; color: white; font-weight: 600; text-align: center; background: rgba(255,255,255,0.1);">IntelliQuery</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">📄 Max File Size</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ 25MB</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ 32MB</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ 200MB</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">⚡ Response Speed</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ 5-15s</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ 8-20s</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ <3s</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">🎯 Document Focus</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ General Purpose</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ General Purpose</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ Document Specialist</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">💰 Cost per Query</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ $0.03-0.06</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ $0.015-0.075</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ $0.0001</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">🔍 Semantic Search</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ Basic</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ Basic</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ Advanced FAISS</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">🔒 Data Privacy</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ Stored for Training</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ Stored Temporarily</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ Never Stored</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">📊 Batch Processing</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ No</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ No</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ Yes</td>
+                        </tr>
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.1);">
+                            <td style="padding: 16px; color: white; font-weight: 500;">🏢 Enterprise Ready</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ Limited</td>
+                            <td style="padding: 16px; text-align: center; color: #f59e0b;">⚠️ Limited</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ Full Support</td>
+                        </tr>
+                        <tr>
+                            <td style="padding: 16px; color: white; font-weight: 500;">🎨 Custom UI</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ Fixed Interface</td>
+                            <td style="padding: 16px; text-align: center; color: #ef4444;">❌ Fixed Interface</td>
+                            <td style="padding: 16px; text-align: center; color: #10b981; font-weight: 600;">✅ Fully Customizable</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="row mt-5">
+                <div class="col-12 text-center">
+                    <div class="comparison-cta" style="background: linear-gradient(135deg, var(--primary-color), var(--secondary-color)); padding: 2rem; border-radius: 20px; margin-top: 2rem;">
+                        <h3 style="color: white; margin-bottom: 1rem;">Ready to Experience the Difference?</h3>
+                        <p style="color: rgba(255,255,255,0.9); margin-bottom: 1.5rem;">Join thousands of professionals who've switched to IntelliQuery for superior document intelligence</p>
+                        <div class="comparison-stats" style="display: flex; justify-content: center; gap: 2rem; margin-bottom: 1.5rem; flex-wrap: wrap;">
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: white;">8x</div>
+                                <div style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">Faster</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: white;">300x</div>
+                                <div style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">Cheaper</div>
+                            </div>
+                            <div style="text-align: center;">
+                                <div style="font-size: 1.5rem; font-weight: 700; color: white;">6x</div>
+                                <div style="font-size: 0.9rem; color: rgba(255,255,255,0.8);">Larger Files</div>
+                            </div>
+                        </div>
+                        <button class="btn" style="background: white; color: var(--primary-color); padding: 1rem 2rem; border-radius: 50px; font-weight: 600; border: none; cursor: pointer; transition: all 0.3s ease;" onclick="startChat()" onmouseover="this.style.transform='translateY(-2px)'; this.style.boxShadow='0 10px 30px rgba(0,0,0,0.2)'" onmouseout="this.style.transform='translateY(0)'; this.style.boxShadow='none'">
+                            <i class="fas fa-rocket me-2"></i>Try IntelliQuery Free
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section class="features-section">
+        <div class="container">
+            <div class="row text-center mb-5">
+                <div class="col-12">
+                    <h2 class="display-4 fw-bold mb-3">Why Choose Intelligent Query?</h2>
+                    <p class="lead text-muted">Built for professionals who need fast, accurate document intelligence</p>
+                </div>
+            </div>
+            
+            <div class="row g-4">
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-upload"></i>
+                        </div>
+                        <h4 class="mb-3">Large File Support</h4>
+                        <p class="text-muted">Upload PDFs up to 200MB. Handle comprehensive reports, manuals, and research papers with ease.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <h4 class="mb-3">Lightning Fast</h4>
+                        <p class="text-muted">Powered by Groq API and Llama 3.1 8B Instant. Get answers in under 3 seconds, not minutes.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <h4 class="mb-3">Smart Understanding</h4>
+                        <p class="text-muted">Advanced semantic search and context understanding. Ask complex questions and get precise answers.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-shield-alt"></i>
+                        </div>
+                        <h4 class="mb-3">Secure & Private</h4>
+                        <p class="text-muted">Your documents are processed securely and not stored permanently. Complete privacy guaranteed.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-mobile-alt"></i>
+                        </div>
+                        <h4 class="mb-3">Works Everywhere</h4>
+                        <p class="text-muted">Responsive design works perfectly on desktop, tablet, and mobile. Access from anywhere.</p>
+                    </div>
+                </div>
+                
+                <div class="col-lg-4 col-md-6">
+                    <div class="feature-card">
+                        <div class="feature-icon">
+                            <i class="fas fa-history"></i>
+                        </div>
+                        <h4 class="mb-3">Chat History</h4>
+                        <p class="text-muted">Keep track of all your conversations. Easily reference previous questions and answers.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function startChat() {
+            // Redirect to chat interface
+            window.location.href = '/chat';
+        }
+    </script>
+</body>
+</html>

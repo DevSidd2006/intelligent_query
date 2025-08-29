@@ -120,22 +120,15 @@ def get_ner_pipeline():
 
 def get_api_key():
     """
-    Get API key with fallback support for different naming conventions
-    Supports both OPENROUTER_API_KEY and OPENAI_API_KEY for backward compatibility
+    Get Groq API key
     """
-    # Primary key name (preferred)
-    api_key = os.getenv('OPENROUTER_API_KEY')
+    # Groq API key
+    api_key = os.getenv('GROQ_API_KEY')
     if api_key:
-        return api_key
-    
-    # Fallback key name for backward compatibility
-    api_key = os.getenv('OPENAI_API_KEY')
-    if api_key:
-        logger.warning("Using OPENAI_API_KEY - Consider renaming to OPENROUTER_API_KEY")
         return api_key
     
     # No key found
-    raise ValueError("❌ No API key found! Please set OPENROUTER_API_KEY in your .env file")
+    raise ValueError("❌ No API key found! Please set GROQ_API_KEY in your .env file")
 
 # Step 1: Document Ingestion
 def extract_text_from_pdf_fast(pdf_path):
@@ -163,8 +156,6 @@ def extract_text_from_pdf_fast(pdf_path):
         doc.close()
         
         # Clean and optimize text
-        text = text.replace("iviviv", "").replace("Air Ambulasce", "Air Ambulance")
-        # Remove excessive whitespace
         import re
         text = re.sub(r'\n\s*\n', '\n\n', text)  # Normalize line breaks
         text = re.sub(r' +', ' ', text)  # Remove multiple spaces
@@ -197,7 +188,6 @@ def extract_text_from_pdf_fallback(pdf_path):
                     logger.info(f"Processed {page_num}/{total_pages} pages")
         
         # Clean text
-        text = text.replace("iviviv", "").replace("Air Ambulasce", "Air Ambulance")
         import re
         text = re.sub(r'\n\s*\n', '\n\n', text)
         text = re.sub(r' +', ' ', text)
@@ -359,17 +349,32 @@ def estimate_tokens(text: str) -> int:
 
 # Step 3: Query Parsing
 def parse_query(query):
-    # Use cached NER pipeline instead of creating new one
+    # Use cached NER pipeline for general entity extraction
     nlp = get_ner_pipeline()
     entities = nlp(query)
-    parsed = {"care_type": None, "beneficiary": None, "period": None}
+    parsed = {"entities": [], "query_type": "general"}
+    
+    # Extract named entities for context
     for entity in entities:
-        if "mother" in query.lower():
-            parsed["beneficiary"] = "mother"
-        if "preventive care" in query.lower():
-            parsed["care_type"] = "routine preventive care"
-        if "just delivered" in query.lower():
-            parsed["period"] = "postpartum"
+        if entity.get('entity') and entity.get('word'):
+            parsed["entities"].append({
+                'text': entity['word'],
+                'label': entity['entity']
+            })
+    
+    # Determine query type based on keywords
+    query_lower = query.lower()
+    if any(word in query_lower for word in ['what', 'define', 'explain']):
+        parsed["query_type"] = "definition"
+    elif any(word in query_lower for word in ['how', 'process', 'procedure']):
+        parsed["query_type"] = "process"
+    elif any(word in query_lower for word in ['when', 'date', 'time']):
+        parsed["query_type"] = "temporal"
+    elif any(word in query_lower for word in ['who', 'person', 'people']):
+        parsed["query_type"] = "person"
+    elif any(word in query_lower for word in ['where', 'location', 'place']):
+        parsed["query_type"] = "location"
+    
     return parsed
 
 # Step 4: Semantic Retrieval
@@ -387,7 +392,7 @@ def retrieve_relevant_chunks(query, chunks, embeddings, index, model, k=2):
     return relevant_chunks
 
 # Step 5: Decision and Output Generation
-def generate_response(query, chunks, embeddings=None, index=None, model_st=None, llm_model="anthropic/claude-3-haiku"):
+def generate_response(query, chunks, embeddings=None, index=None, model_st=None, llm_model="llama-3.1-8b-instant"):
     # Configure OpenRouter API using new OpenAI client
     from openai import OpenAI
     
@@ -401,52 +406,48 @@ def generate_response(query, chunks, embeddings=None, index=None, model_st=None,
         
         client = OpenAI(
             api_key=api_key,
-            base_url="https://openrouter.ai/api/v1"
+            base_url="https://api.groq.com/openai/v1"
         )
         
-        logger.info(f"OpenAI client initialized with API key: {api_key[:20]}...")
+        logger.info(f"Groq client initialized with API key: {api_key[:20]}...")
         
     except ValueError as e:
         logger.error(f"API Key Error: {e}")
         return json.dumps({
-            "answer": "❌ API key not configured. Please set OPENROUTER_API_KEY in your .env file.",
-            "justification": "Cannot process query without API key.",
-            "confidence": 0.0
+            "justification": "❌ API key not configured. Please set GROQ_API_KEY in your .env file."
         })
     except Exception as e:
         logger.error(f"Client initialization error: {e}")
         return json.dumps({
-            "answer": "❌ Failed to initialize AI client.",
-            "justification": f"Error: {str(e)}",
-            "confidence": 0.0
+            "justification": f"❌ Failed to initialize AI client: {str(e)}"
         })
     
     parsed_query = parse_query(query)
     relevant_chunks = retrieve_relevant_chunks(query, chunks, embeddings, index, model_st)
     
-    # Construct prompt for LLM - optimized for natural, direct answers
-    prompt = f"""You are answering questions about an insurance policy document. Provide clear, direct answers based on the information provided.
+    # Construct prompt for LLM - generic for all document types
+    prompt = f"""You are a helpful AI assistant that answers questions about documents. Provide clear, accurate answers based on the provided information.
 
 Question: {query}
 
-Document information:
+Relevant document content:
 {chr(10).join([f"{i+1}. {chunk}" for i, chunk in enumerate(relevant_chunks)])}
 
 Instructions:
-1. Give a direct, natural answer as if you are an insurance expert
-2. Include specific numbers, dates, percentages, and conditions when mentioned
-3. Write in a clear, professional tone
-4. Do not mention "according to the document" or "based on excerpts"
-5. Present the information as factual statements
-6. Keep the answer concise but complete
-7. If the information is not available, state "The information is not available in the policy document."
+1. Provide a direct, clear answer based on the document content
+2. Include specific details, numbers, dates, and facts when available
+3. Use a professional but accessible tone
+4. If the information is not available in the document, clearly state this
+5. Present information as factual statements without referencing the source
+6. Keep the answer comprehensive but concise
+7. Structure your response logically
 
 Answer format (JSON):
 {{
-    "justification": "Your direct, natural answer presenting the information as facts"
+    "justification": "Your clear, factual answer based on the document content"
 }}
 
-Provide a clear, factual answer about the policy."""
+Provide an accurate answer based on the document."""
     
     # Estimate token count using improved function
     estimated_tokens = estimate_tokens(prompt)
@@ -457,31 +458,30 @@ Provide a clear, factual answer about the policy."""
         logger.warning("Prompt too long, using only first chunk")
         relevant_chunks = relevant_chunks[:1]
         # Recreate shorter prompt
-        prompt = f"""Answer this insurance policy question directly and naturally.
+        prompt = f"""Answer this document question directly and clearly.
 
 Question: {query}
 
-Policy information: {relevant_chunks[0][:300]}...
+Document information: {relevant_chunks[0][:300]}...
 
 Provide a direct, factual answer. Include specific details when mentioned.
 
-Format: {{"justification": "Your direct answer presenting the policy information as facts"}}"""
+Format: {{"justification": "Your direct answer based on the document content"}}"""
 
     try:
-        # Generate response using OpenRouter with new API
+        # Generate response using Groq API
         system_prompt = (
-            "You are an insurance policy expert providing direct, clear answers. "
-            "Present information as factual statements without referencing source documents. "
+            "You are a knowledgeable document analysis assistant providing clear, accurate answers. "
+            "Present information as factual statements based on document content. "
             "Guidelines: "
-            "1. Give natural, direct answers as if you are an insurance expert "
-            "2. Never say 'according to the document' or 'based on excerpts' "
-            "3. Present information as established facts "
-            "4. Include specific numbers, dates, percentages, and conditions "
-            "5. Write in a professional, authoritative tone "
-            "6. Keep answers concise but complete "
-            "7. Return answers in the specified JSON format "
-            "8. If information is not available, state it clearly without referencing documents "
-            "Answer as if you are explaining policy terms directly to a customer."
+            "1. Provide direct, informative answers based on the document "
+            "2. Include specific details, numbers, dates, and facts when available "
+            "3. Use clear, professional language "
+            "4. Structure information logically "
+            "5. Be comprehensive but concise "
+            "6. Return answers in the specified JSON format "
+            "7. If information is not available, state this clearly "
+            "8. Adapt your expertise to the document type and content "
         )
         response = client.chat.completions.create(
             model=llm_model,
@@ -490,10 +490,7 @@ Format: {{"justification": "Your direct answer presenting the policy information
                 {"role": "user", "content": prompt}
             ],
             max_tokens=256,  # Lower this value
-            extra_headers={
-                "HTTP-Referer": "http://localhost:5000",
-                "X-Title": "PDF Q&A System"
-            }
+
         )
         
         response_text = response.choices[0].message.content

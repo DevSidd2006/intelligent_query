@@ -162,24 +162,17 @@ def get_ner_pipeline():
 
 @lru_cache(maxsize=1)
 def get_api_key() -> str:
-    """Get API key with caching"""
-    # Primary key name (preferred)
-    api_key = os.getenv('OPENROUTER_API_KEY')
+    """Get Groq API key with caching"""
+    # Groq API key
+    api_key = os.getenv('GROQ_API_KEY')
     if api_key:
-        return api_key
-    
-    # Fallback key name for backward compatibility
-    api_key = os.getenv('OPENAI_API_KEY')
-    if api_key:
-        logger.warning("Using OPENAI_API_KEY - Consider renaming to OPENROUTER_API_KEY")
         return api_key
     
     # No key found
-    raise ValueError("❌ No API key found! Please set OPENROUTER_API_KEY in your .env file")
+    raise ValueError("❌ No API key found! Please set GROQ_API_KEY in your .env file")
 
 def clean_text_fast(text: str) -> str:
     """Optimized text cleaning using precompiled regex"""
-    text = text.replace("iviviv", "").replace("Air Ambulasce", "Air Ambulance")
     text = WHITESPACE_PATTERN.sub('\n\n', text)
     text = MULTIPLE_SPACES_PATTERN.sub(' ', text)
     return text
@@ -423,17 +416,21 @@ def estimate_tokens(text: str) -> int:
 @lru_cache(maxsize=256)
 def parse_query_cached(query: str) -> Dict[str, Optional[str]]:
     """Cached query parsing for repeated queries"""
-    parsed = {"care_type": None, "beneficiary": None, "period": None}
+    parsed = {"query_type": "general", "entities": []}
     
     query_lower = query.lower()
     
-    # Fast string matching instead of NER for common patterns
-    if "mother" in query_lower:
-        parsed["beneficiary"] = "mother"
-    if "preventive care" in query_lower:
-        parsed["care_type"] = "routine preventive care"
-    if "just delivered" in query_lower or "postpartum" in query_lower:
-        parsed["period"] = "postpartum"
+    # Determine query type based on keywords
+    if any(word in query_lower for word in ['what', 'define', 'explain']):
+        parsed["query_type"] = "definition"
+    elif any(word in query_lower for word in ['how', 'process', 'procedure']):
+        parsed["query_type"] = "process"
+    elif any(word in query_lower for word in ['when', 'date', 'time']):
+        parsed["query_type"] = "temporal"
+    elif any(word in query_lower for word in ['who', 'person', 'people']):
+        parsed["query_type"] = "person"
+    elif any(word in query_lower for word in ['where', 'location', 'place']):
+        parsed["query_type"] = "location"
     
     return parsed
 
@@ -466,7 +463,7 @@ def retrieve_relevant_chunks(query: str, chunks: List[str], embeddings: np.ndarr
 # Step 5: Decision and Output Generation (Async Optimized)
 async def generate_response_async(query: str, chunks: List[str], embeddings: np.ndarray = None, 
                                 index: faiss.Index = None, model_st: SentenceTransformer = None, 
-                                llm_model: str = "anthropic/claude-sonnet-4") -> str:
+                                llm_model: str = "llama-3.1-8b-instant") -> str:
     """Async response generation for better concurrency"""
     
     def _sync_generate():
@@ -478,7 +475,7 @@ async def generate_response_async(query: str, chunks: List[str], embeddings: np.
 
 def generate_response(query: str, chunks: List[str], embeddings: np.ndarray = None, 
                      index: faiss.Index = None, model_st: SentenceTransformer = None, 
-                     llm_model: str = "anthropic/claude-sonnet-4") -> str:
+                     llm_model: str = "llama-3.1-8b-instant") -> str:
     """Optimized response generation"""
     from openai import OpenAI
     
@@ -487,14 +484,14 @@ def generate_response(query: str, chunks: List[str], embeddings: np.ndarray = No
         
         client = OpenAI(
             api_key=api_key,
-            base_url="https://openrouter.ai/api/v1",
+            base_url="https://api.groq.com/openai/v1",
             timeout=15.0  # Add timeout for faster failures
         )
         
     except ValueError as e:
         logger.error(f"API Key Error: {e}")
         return json.dumps({
-            "justification": "❌ API key not configured. Please set OPENROUTER_API_KEY in your .env file."
+            "justification": "❌ API key not configured. Please set GROQ_API_KEY in your .env file."
         })
     except Exception as e:
         logger.error(f"Client initialization error: {e}")
@@ -505,34 +502,25 @@ def generate_response(query: str, chunks: List[str], embeddings: np.ndarray = No
     # Fast query parsing and retrieval
     parsed_query = parse_query(query)
     relevant_chunks = retrieve_relevant_chunks(query, chunks, embeddings, index, model_st)
-    # Highly specific, concise, number-focused insurance policy prompt
-    prompt = f"""You are an expert insurance policy analyst. Provide concise yet comprehensive answers with maximum numerical precision.
+    # Generic document analysis prompt for all document types
+    prompt = f"""You are a knowledgeable document analyst. Provide clear, accurate answers based on the document content.
 
-CRITICAL REQUIREMENTS:
-- For yes/no questions: Start with 'Yes,' or 'No,' then provide essential explanation
-- Include ALL key numbers: exact days, months, years, percentages, amounts
-- State important plan variations (Plan A vs Plan B vs Plan C) with key differences only
-- Include essential age limits, waiting periods, and main coverage conditions
-- Quote main benefit amounts, caps, and limits with numbers
-- Mention only critical exceptions and key conditions
-- Keep responses concise-medium length (50 words max) but include all essential details
-
-ANSWER FORMAT:
-- Yes/No questions: 'Yes, [key explanation with specifics]' or 'No, [key explanation with specifics]'
-- Other questions: Direct answer with essential numerical details
-- Focus on: main timeframes, key percentages, important plan differences, primary limits
-- Include only the most relevant conditions and exceptions
-- Avoid excessive bullet points and sub-details
-
-IMPORTANT:
-- Do NOT include phrases like 'according to the document', 'as per the policy', or any reference to the source. Only give the direct answer.
+Question: {query}
 
 Document Context:
 {chr(10).join([f"{i+1}. {chunk}" for i, chunk in enumerate(relevant_chunks)])}
 
-Question: {query}
+Instructions:
+- Provide direct, factual answers based on the document content
+- Include specific details, numbers, dates, and facts when available
+- For yes/no questions, start with 'Yes' or 'No' followed by explanation
+- Use clear, professional language
+- Be comprehensive but concise
+- If information is not available, state this clearly
+- Structure your response logically
+- Do not reference the document source in your answer
 
-Concise answer with essential details and maximum numerical accuracy:"""
+Provide a clear, accurate answer based on the content."""
     # Estimate token count using improved function
     estimated_tokens = estimate_tokens(prompt)
     logger.info(f"Estimated prompt tokens: {estimated_tokens}")
@@ -541,15 +529,15 @@ Concise answer with essential details and maximum numerical accuracy:"""
         logger.warning("Prompt too long, using only first chunk")
         relevant_chunks = relevant_chunks[:1]
         # Recreate shorter prompt
-        prompt = f"""Answer this insurance policy question directly and naturally.
+        prompt = f"""Answer this document question directly and clearly.
 
 Question: {query}
 
-Policy information: {relevant_chunks[0][:300]}...
+Document information: {relevant_chunks[0][:300]}...
 
 Provide a direct, factual answer. Include specific details when mentioned.
 
-Format: {{"justification": "Your direct answer presenting the policy information as facts"}}"""
+Format: {{"justification": "Your direct answer based on the document content"}}"""
 
     try:
         # Optimized API call with lower token limits for speed
@@ -558,16 +546,13 @@ Format: {{"justification": "Your direct answer presenting the policy information
             messages=[
                 {
                     "role": "system", 
-                    "content": "You are an insurance expert. Provide direct, factual answers. Return JSON format only."
+                    "content": "You are a document analysis expert. Provide direct, factual answers. Return JSON format only."
                 },
                 {"role": "user", "content": prompt}
             ],
             max_tokens=200,  # Lower token limit for faster response
             temperature=0.3,  # Lower temperature for more consistent responses
-            extra_headers={
-                "HTTP-Referer": "http://localhost:5000",
-                "X-Title": "PDF Q&A System"
-            }
+
         )
         
         response_text = response.choices[0].message.content
