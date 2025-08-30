@@ -32,7 +32,7 @@ def import_app_module():
     except (ImportError, ValueError):
         try:
             # Method 2: Try direct import (when running standalone)
-            from app import extract_text_from_pdf, create_document_embeddings, generate_response
+            from .app import extract_text_from_pdf, create_document_embeddings, generate_response
             return extract_text_from_pdf, create_document_embeddings, generate_response
         except ImportError:
             try:
@@ -40,7 +40,7 @@ def import_app_module():
                 current_dir = os.path.dirname(os.path.abspath(__file__))
                 if current_dir not in sys.path:
                     sys.path.insert(0, current_dir)
-                from app import extract_text_from_pdf, create_document_embeddings, generate_response
+                from .app import extract_text_from_pdf, create_document_embeddings, generate_response
                 return extract_text_from_pdf, create_document_embeddings, generate_response
             except ImportError:
                 # Method 4: Absolute path import (fallback)
