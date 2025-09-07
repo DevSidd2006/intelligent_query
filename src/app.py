@@ -120,15 +120,19 @@ def get_ner_pipeline():
 
 def get_api_key():
     """
-    Get Groq API key
+    Get Groq API key with proper error handling
     """
     # Groq API key
     api_key = os.getenv('GROQ_API_KEY')
     if api_key:
+        # Validate key format
+        if not api_key.startswith('gsk_'):
+            logger.warning("API key format unusual (should start with 'gsk_')")
         return api_key
     
     # No key found
-    raise ValueError("❌ No API key found! Please set GROQ_API_KEY in your .env file")
+    logger.error("❌ No API key found! Please set GROQ_API_KEY in your .env file")
+    raise ValueError("No API key found! Please set GROQ_API_KEY in your .env file")
 
 # Step 1: Document Ingestion
 def extract_text_from_pdf_fast(pdf_path):

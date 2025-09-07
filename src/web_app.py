@@ -22,49 +22,36 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Smart import handling for different deployment scenarios
+# Simplified import handling
 def import_app_module():
-    """Dynamic import handler for app.py that works in all environments"""
+    """Import functions from app.py with error handling"""
     try:
-        # Method 1: Try relative import (when running as package)
+        # First try relative import
         from .app import extract_text_from_pdf, create_document_embeddings, generate_response
         return extract_text_from_pdf, create_document_embeddings, generate_response
-    except (ImportError, ValueError):
+    except ImportError:
         try:
-            # Method 2: Try direct import (when running standalone)
-            from .app import extract_text_from_pdf, create_document_embeddings, generate_response
-            return extract_text_from_pdf, create_document_embeddings, generate_response
-        except ImportError:
-            try:
-                # Method 3: Add current directory to path and import
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                if current_dir not in sys.path:
-                    sys.path.insert(0, current_dir)
-                from .app import extract_text_from_pdf, create_document_embeddings, generate_response
-                return extract_text_from_pdf, create_document_embeddings, generate_response
-            except ImportError:
-                # Method 4: Absolute path import (fallback)
-                import importlib.util
-                app_file = os.path.join(os.path.dirname(__file__), 'app.py')
-                if not os.path.exists(app_file):
-                    raise ImportError(f"Could not find app.py at {app_file}")
-                
-                spec = importlib.util.spec_from_file_location("app_module", app_file)
-                app_module = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(app_module)
-                
-                return (app_module.extract_text_from_pdf, 
-                       app_module.create_document_embeddings, 
-                       app_module.generate_response)
+            # Then try direct import
+            import app
+            return app.extract_text_from_pdf, app.create_document_embeddings, app.generate_response
+        except ImportError as e:
+            logger.error(f"Failed to import app module: {e}")
+            logger.error("Please ensure app.py is accessible from the current directory")
+            raise ImportError("Could not import required functions from app.py")
 
-# Import the required functions
+# Import the required functions with proper error handling
 try:
     extract_text_from_pdf, create_document_embeddings, generate_response = import_app_module()
     logger.info("Successfully imported app module functions")
-except Exception as import_error:
-    logger.error(f"Failed to import app module: {import_error}")
-    logger.error("Please ensure app.py is in the same directory as web_app.py")
-    sys.exit(1)
+except ImportError as import_error:
+    logger.error(f"Import error: {import_error}")
+    # Define placeholder functions to prevent crashes
+    def extract_text_from_pdf(*args, **kwargs):
+        raise RuntimeError("App module not properly imported. Please check app.py")
+    def create_document_embeddings(*args, **kwargs):
+        raise RuntimeError("App module not properly imported. Please check app.py")
+    def generate_response(*args, **kwargs):
+        raise RuntimeError("App module not properly imported. Please check app.py")
 
 def get_api_key():
     """
@@ -106,14 +93,26 @@ if not validate_api_configuration():
 
 app = Flask(__name__)
 
-# Secure secret key handling
+# Secure secret key handling with proper warning
 secret_key = os.environ.get('SECRET_KEY')
 if not secret_key:
     # Generate a random secret key for development
     secret_key = secrets.token_hex(32)
-    logger.warning("Using generated secret key. Set SECRET_KEY environment variable for production.")
+    logger.warning("SECRET_KEY not set! Using generated key for this session.")
+    logger.warning("For production, set SECRET_KEY environment variable!")
+else:
+    logger.info("Using configured SECRET_KEY from environment")
 
 app.secret_key = secret_key
+
+# Add basic security headers
+@app.after_request
+def add_security_headers(response):
+    """Add basic security headers to all responses"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    return response
 
 # Configuration
 ALLOWED_EXTENSIONS = {'pdf'}
@@ -160,6 +159,32 @@ def add_message_to_session(session_id, message, sender, response_data=None):
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+def validate_url(url):
+    """Validate URL for security (prevent SSRF attacks)"""
+    import urllib.parse
+    try:
+        parsed = urllib.parse.urlparse(url)
+        # Only allow HTTP/HTTPS schemes
+        if parsed.scheme not in ['http', 'https']:
+            return False
+        # Block local/private IP ranges
+        import socket
+        hostname = parsed.hostname
+        if hostname:
+            try:
+                ip = socket.gethostbyname(hostname)
+                # Block localhost and private networks
+                if (ip.startswith('127.') or ip.startswith('10.') or 
+                    ip.startswith('192.168.') or 
+                    (ip.startswith('172.') and 16 <= int(ip.split('.')[1]) <= 31)):
+                    return False
+            except (socket.gaierror, ValueError, IndexError):
+                # If DNS resolution fails, allow the URL (let requests handle it)
+                pass
+        return True
+    except Exception:
+        return False
 
 # Modern HTML Template with enhanced features
 HTML_TEMPLATE = """
@@ -1719,6 +1744,10 @@ def upload_file():
             file.save(temp_file_path)
             temp_file.close()  # Explicitly close the file
             
+            # Validate PDF content
+            if not validate_pdf_content(temp_file_path):
+                return jsonify({'error': 'Invalid PDF file. Please upload a valid PDF document.'}), 400
+            
             # Add a small delay to ensure file is released
             time.sleep(0.1)
             gc.collect()  # Force garbage collection
@@ -1791,6 +1820,11 @@ def upload_url():
         pdf_url = request.form.get('pdf_url', '').strip()
         if not pdf_url:
             flash('Please enter a valid PDF URL')
+            return redirect(url_for('index'))
+        
+        # Validate URL for security
+        if not validate_url(pdf_url):
+            flash('Invalid or potentially unsafe URL. Please use a valid HTTP/HTTPS URL.')
             return redirect(url_for('index'))
         
         # Clear previous document first
@@ -1947,11 +1981,26 @@ def load_session():
 def clear_document():
     try:
         global current_session_id
+        
+        # Clear references and force garbage collection
+        if current_document['chunks'] is not None:
+            del current_document['chunks']
+        if current_document['embeddings'] is not None:
+            del current_document['embeddings']
+        if current_document['index'] is not None:
+            del current_document['index']
+        if current_document['model_st'] is not None:
+            del current_document['model_st']
+        
         current_document.update({
             'chunks': None, 'embeddings': None, 'index': None, 
             'model_st': None, 'filename': None, 'upload_time': None, 'chunk_count': 0
         })
         current_session_id = None
+        
+        # Force garbage collection to free memory
+        gc.collect()
+        
         return jsonify({'success': True, 'message': 'Document cleared successfully'})
     except Exception as e:
         return jsonify({'error': f'Error clearing document: {str(e)}'}), 500
