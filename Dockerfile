@@ -27,8 +27,9 @@ RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 
-# Copy application code
+# Copy application code and scripts
 COPY src/ ./src/
+COPY run_flask.py .
 
 # Create uploads directory with proper permissions
 RUN mkdir -p uploads && \
@@ -45,15 +46,15 @@ RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose FastAPI port
+# Expose Flask port
 EXPOSE 3000
 
 
-# Health check for FastAPI
+# Health check for Flask
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
+    CMD curl -f http://localhost:3000/status || exit 1
 
-# Start FastAPI server for HackRx endpoint
-CMD ["uvicorn", "src.app:app", "--host", "0.0.0.0", "--port", "3000"]
+# Start Flask web server
+CMD ["python", "run_flask.py"]
 
 

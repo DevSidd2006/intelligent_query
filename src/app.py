@@ -379,17 +379,32 @@ def parse_query(query):
 
 # Step 4: Semantic Retrieval
 def retrieve_relevant_chunks(query, chunks, embeddings, index, model, k=2):
-    query_embedding = model.encode([query])[0]
-    distances, indices = index.search(np.array([query_embedding]), k)
-    # Limit chunk size to prevent token overflow
-    relevant_chunks = []
-    for i in indices[0]:
-        chunk = chunks[i]
-        # Limit each chunk to 500 characters to stay within token limits
-        if len(chunk) > 500:
-            chunk = chunk[:500] + "..."
-        relevant_chunks.append(chunk)
-    return relevant_chunks
+    # Validate inputs
+    if model is None:
+        logger.warning("Model is None, using first few chunks as fallback")
+        return chunks[:k] if len(chunks) > k else chunks
+    
+    if index is None or embeddings is None:
+        logger.warning("Index or embeddings is None, using first few chunks as fallback")
+        return chunks[:k] if len(chunks) > k else chunks
+    
+    try:
+        query_embedding = model.encode([query])[0]
+        distances, indices = index.search(np.array([query_embedding]), k)
+        # Limit chunk size to prevent token overflow
+        relevant_chunks = []
+        for i in indices[0]:
+            if i < len(chunks):  # Safety check
+                chunk = chunks[i]
+                # Limit each chunk to 500 characters to stay within token limits
+                if len(chunk) > 500:
+                    chunk = chunk[:500] + "..."
+                relevant_chunks.append(chunk)
+        return relevant_chunks
+    except Exception as e:
+        logger.error(f"Error in semantic retrieval: {e}")
+        # Fallback to first few chunks
+        return chunks[:k] if len(chunks) > k else chunks
 
 # Step 5: Decision and Output Generation
 def generate_response(query, chunks, embeddings=None, index=None, model_st=None, llm_model="llama-3.1-8b-instant"):
@@ -423,7 +438,13 @@ def generate_response(query, chunks, embeddings=None, index=None, model_st=None,
         })
     
     parsed_query = parse_query(query)
-    relevant_chunks = retrieve_relevant_chunks(query, chunks, embeddings, index, model_st)
+    
+    # Handle case when semantic search parameters are not available
+    if embeddings is not None and index is not None and model_st is not None:
+        relevant_chunks = retrieve_relevant_chunks(query, chunks, embeddings, index, model_st)
+    else:
+        # Fallback: use first few chunks if no semantic search available
+        relevant_chunks = chunks[:3] if len(chunks) > 3 else chunks
     
     # Construct prompt for LLM - generic for all document types
     prompt = f"""You are a helpful AI assistant that answers questions about documents. Provide clear, accurate answers based on the provided information.

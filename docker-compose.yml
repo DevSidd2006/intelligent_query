@@ -1,27 +1,35 @@
 services:
   pdf-qa-app:
-    build: .
+    build:
+      context: .
+      dockerfile: Dockerfile
     container_name: intelligent-query-app
     restart: unless-stopped
     ports:
-      - "5000:5000"
+      - "3000:3000"
     environment:
       - FLASK_ENV=production
       - PYTHONPATH=/app/src:/app
       - PYTHONUNBUFFERED=1
-      - PORT=5000
+      - PORT=3000
     env_file:
       - .env
     volumes:
       - ./uploads:/app/uploads
+      - ./logs:/app/logs
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5000/status"]
+      test: ["CMD", "curl", "-f", "http://localhost:3000/status"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 40s
     networks:
       - pdf-qa-network
+    # Uncomment for development with auto-reload
+    # command: python -m flask run --host=0.0.0.0 --port=3000
+    # Additional options for production
+    # mem_limit: 2g
+    # cpus: '1.5'
 
 networks:
   pdf-qa-network:
