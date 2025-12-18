@@ -10,8 +10,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
 if __name__ == "__main__":
+    # Get port from environment variable (Cloud Run sets PORT=8080)
+    port = int(os.environ.get('PORT', 8080))
+    
     print("🚀 Starting Intelligent Query PDF Q&A System...")
-    print("📍 Web Interface: http://localhost:3000")
+    print(f"📍 Web Interface: http://localhost:{port}")
     print("🛑 Press Ctrl+C to stop")
     print("-" * 50)
     
@@ -19,7 +22,7 @@ if __name__ == "__main__":
         from src.web_app import app
         app.run(
             host='0.0.0.0',
-            port=3000,
+            port=port,
             debug=False,
             threaded=True
         )

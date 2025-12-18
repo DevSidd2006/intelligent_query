@@ -26,24 +26,20 @@ logger = logging.getLogger(__name__)
 def import_app_module():
     """Dynamic import handler for app.py that works in all environments"""
     try:
-        # Method 1: Try relative import (when running as package)
-        from .app import extract_text_from_pdf, create_document_embeddings, generate_response
-        return extract_text_from_pdf, create_document_embeddings, generate_response
-    except (ImportError, ValueError):
+        # Method 1: Try direct import (most common case)
+        import app
+        return app.extract_text_from_pdf, app.create_document_embeddings, app.generate_response
+    except ImportError:
         try:
-            # Method 2: Try direct import (when running standalone)
-            from .app import extract_text_from_pdf, create_document_embeddings, generate_response
-            return extract_text_from_pdf, create_document_embeddings, generate_response
+            # Method 2: Add current directory to path and import
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.insert(0, current_dir)
+            import app
+            return app.extract_text_from_pdf, app.create_document_embeddings, app.generate_response
         except ImportError:
             try:
-                # Method 3: Add current directory to path and import
-                current_dir = os.path.dirname(os.path.abspath(__file__))
-                if current_dir not in sys.path:
-                    sys.path.insert(0, current_dir)
-                from .app import extract_text_from_pdf, create_document_embeddings, generate_response
-                return extract_text_from_pdf, create_document_embeddings, generate_response
-            except ImportError:
-                # Method 4: Absolute path import (fallback)
+                # Method 3: Absolute path import (fallback for PythonAnywhere)
                 import importlib.util
                 app_file = os.path.join(os.path.dirname(__file__), 'app.py')
                 if not os.path.exists(app_file):
@@ -56,6 +52,8 @@ def import_app_module():
                 return (app_module.extract_text_from_pdf, 
                        app_module.create_document_embeddings, 
                        app_module.generate_response)
+            except Exception as e:
+                raise ImportError(f"All import methods failed. Last error: {e}")
 
 # Import the required functions
 try:
@@ -2172,7 +2170,7 @@ def hackrx_run():
         }), 500
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 3000))
+    port = int(os.environ.get('PORT', 8080))
     # Production configuration
     app.run(
         host='0.0.0.0', 

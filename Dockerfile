@@ -46,13 +46,13 @@ RUN useradd --create-home --shell /bin/bash appuser && \
     chown -R appuser:appuser /app
 USER appuser
 
-# Expose Flask port
-EXPOSE 3000
+# Expose Flask port (Cloud Run will set PORT env var)
+EXPOSE 8080
 
 
-# Health check for Flask
+# Health check for Flask (Cloud Run handles health checks, so this is optional)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-    CMD curl -f http://localhost:3000/status || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/status || exit 1
 
 # Start Flask web server
 CMD ["python", "run_flask.py"]

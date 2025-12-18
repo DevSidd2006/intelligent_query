@@ -286,7 +286,15 @@ def create_document_embeddings(text):
     chunks = [chunk for chunk in chunks if len(chunk) >= 100]
     
     logger.info(f"📊 Created {len(chunks)} optimized chunks")
-    logger.info(f"💡 Average chunk size: {sum(len(c) for c in chunks) // len(chunks)} characters")
+    if chunks:
+        logger.info(f"💡 Average chunk size: {sum(len(c) for c in chunks) // len(chunks)} characters")
+    else:
+        logger.warning("⚠️ No chunks created after filtering. Document may be too short or empty.")
+    
+    # Check if we have any chunks to process
+    if not chunks:
+        logger.error("❌ No valid chunks to embed. Document may be too short or empty.")
+        raise ValueError("Document produced no valid chunks after filtering. Minimum chunk size is 100 characters.")
     
     # Optimized embedding with progress tracking
     logger.info("🔮 Encoding chunks with fast model...")
